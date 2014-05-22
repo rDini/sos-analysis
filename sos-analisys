@@ -1,0 +1,309 @@
+#!/bin/bash
+#var="texto exemplo"
+#echo $var
+if [ ! -e "/tmp/sosreport-analisys/" ]       # Check if file exists.
+  then
+    mkdir /tmp/sosreport-analisys/
+    continue                # On to next.
+fi
+
+LOCALFIM="/tmp/sosreport-analisys/sysresult"
+LOCALNULL="/dev/null"
+LOCALTEMP="/tmp/sosreport-analisys/systemp"
+LOCALTEMP2="/tmp/sosreport-analisys/systemp2"
+CLEANGREP="/tmp/sosreport-analisys/cleangrep"
+CLEANGREP2="/tmp/sosreport-analisys/cleangrep2"
+CLEANGREP3="/tmp/sosreport-analisys/cleangrep3"
+GREPGREP="/tmp/sosreport-analisys/grepgrep"
+GREPGREP2="/tmp/sosreport-analisys/grepgrep2"
+
+#CASEDIR="/tmp/sosreport-analisys/directory"
+DIRECTORY="/Cases"
+#CASEDIR2=$(cat $CASEDIR)
+
+KERNEL=$(cat uname |cut -d ' ' -f 3)
+RELEASE=$(cat etc/redhat-release | cut -d ' ' -f 7)
+
+
+############################################################  FUNCTIONS  \/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+#
+function salva (){
+	echo $1 >> $LOCALFIM
+	echo $1
+}
+#
+function map(){
+	for item in $2; do
+		$1 $item
+	done
+}
+function releasee(){
+	echo -e "$(cat etc/redhat-release | cut -d ' ' -f 1,2,3,4,5,6) \033[33m $RELEASE \033[0m $(cat etc/redhat-release | cut -d ' ' -f 8) "
+	
+
+}
+function cgrep(){
+	echo -n "cat var/log/messages "  > $CLEANGREP2
+	if
+		[ -a /tmp/sosreport-analisys/cleangrep ]
+	then
+		while read line         
+		do         
+			echo -en "| grep -v \"$line\" "  >> $CLEANGREP2
+		done <$CLEANGREP
+	fi
+        if
+                [ -a /tmp/sosreport-analisys/grepgrep ]
+        then
+		echo -en "| grep --color=always -i "  >> $CLEANGREP2
+                while read line         
+                do         
+                        echo -en "-e \"$line\" "  >> $CLEANGREP2
+                done <$GREPGREP
+        fi
+        if
+                [ -a /tmp/sosreport-analisys/grepgrep2 ]
+        then
+		echo -en "| grep --color=always "  >> $CLEANGREP2
+                while read line         
+                do
+                        echo -en "-e \"$line\" "  >> $CLEANGREP2
+                done <$GREPGREP2
+        fi
+
+
+	echo -n "| less --RAW-CONTROL-CHARS" >> $CLEANGREP2
+	cgrepp=$(cat $CLEANGREP2)
+	eval $cgrepp
+	echo $cgrepp
+}
+
+function cgrepall(){
+        echo -n "cat var/log/messages* "  > $CLEANGREP2
+        if
+                [ -a /tmp/sosreport-analisys/cleangrep ]
+        then
+                while read line         
+                do
+                        echo -en "| grep -v \"$line\" "  >> $CLEANGREP2
+                done <$CLEANGREP
+        fi
+        if
+                [ -a /tmp/sosreport-analisys/grepgrep ]
+        then
+                echo -en "| grep --color=always -i "  >> $CLEANGREP2
+                while read line         
+                do
+                        echo -en "-e \"$line\" "  >> $CLEANGREP2
+                done <$GREPGREP
+        fi
+        if
+                [ -a /tmp/sosreport-analisys/grepgrep2 ]
+        then
+                echo -en "| grep --color=always "  >> $CLEANGREP2
+                while read line         
+                do
+                        echo -en "-e \"$line\" "  >> $CLEANGREP2
+                done <$GREPGREP2
+        fi
+
+
+        echo -n "| less --RAW-CONTROL-CHARS" >> $CLEANGREP2
+        cgrepp=$(cat $CLEANGREP2)
+        eval $cgrepp
+        echo $cgrepp
+}
+
+function printusage(){
+	echo -e "\033[35mUSAGE:\033[0m sos-analisys [OPTION] [PATTERN]
+PATTERN is, by default, a basic regular expression (BRE).
+Example: grep -i 'hello world' menu.h main.c\n
+\t-l|-h\t List this options
+\t-S\t List all Segfaults from all messages 
+\t-s\t List Segfaults from last messages 
+\t-f\t use PATTERN, ignore case distinctions, for matching in ALL sosreport files
+\t-F\t use PATTERN for matching in ALL sosreport files
+\t-r\t Show when server have been rebooted. It will grep on messages.
+\t-R\t Show when server have been rebooted. This one grep from all messages \n
+
+GREPPING MESSAGES
+\t-v\t use PATTERN for invert-matching, you can use multiples '-v', results on option -g
+\t-V\t Insert a invert-match, results on option -g
+\t-i\t Insert a \"grep -i -e PATTERN\" if more \"-i\" are added, it will insert a \"-e PATTERN\"
+\t-I\t Same as \"-i\", but case sensitive.
+\t-g\t Clean version of the grep on messages. It will be applied with the \"-v\" info.
+\t-c\t Clean all the \"-v\" stored.
+\t-k\t Show kdump config\/status.
+It will read messages, apply \"-v\", then grep -e , then less. if the parameters has been added"
+}
+
+function CatReboot(){
+	echo "--=<[ REBOOTS ON MESSAGES"
+	grep "Linux version" var/log/messages | tr -s ' ' | cut -d ' ' -f 1,2,3,5,8
+}
+
+function CatRebootAll(){
+        echo "--=<[ REBOOTS ON ALL MESSAGES"
+        grep "Linux version" var/log/messages* | tr -s ' ' | cut -d ' ' -f 1,2,3,5,8
+#
+#        tr elimina espaços multiplos, facilitando o cut
+#
+}
+
+function ChangeDir(){
+	cd $CASEDIR2
+}
+
+#################### KDUMP STATUS
+function kdumpstatus(){
+	grep kdump chkconfig
+	grep -v "^#" etc/kdump.conf
+	echo -e "\033[31m +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\033[0m"
+	grep crashkernel boot/grub/grub.conf
+	echo -e "\033[31m+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\033[0m"
+	grep crash df
+#	grep crash df |gawk -f /home/rdini/Documents/cases/awkteste.awk | awk '{ print $1 }'
+	cat free |gawk -f /home/rdini/Documents/cases/awkteste.awk | awk '{ print "Mem Total: " $2 }'
+	echo "espaço livre: $[$(grep crash df |gawk -f /home/rdini/Documents/cases/awkteste.awk | awk '{ print $1 }') - $(cat free |gawk -f /home/rdini/Documents/cases/awkteste.awk | awk '{ print $2 }')]"
+}
+
+
+##echo "########## - - - ########### - - - ###########" > $LOCALFIM
+##
+###################################################################  VERIFY IF IT IS REGISTERED \/\/\/\/\/
+
+function s0s-sh(){
+	grep $KERNEL uname --color ##  >> $LOCALFIM
+	releasee
+	if 
+	        ls etc/sysconfig/rhn/ | grep systemid > $LOCALNULL
+	then
+	        echo -e "\033[32m This system is registered to RHN Classic \033[0m"
+	
+	else
+	        if
+			[ -z "$(grep "Managed by (rhsm) subscription-manager" etc/yum.repos.d/redhat.repo)" ]
+		then
+			echo -e "\033[31m >>  NOT REGISTERED  << \033[0m"
+		else
+			echo -e "\033[32m "$(grep "Managed by (rhsm) subscription-manager" etc/yum.repos.d/redhat.repo)" \033[0m"
+		fi
+	fi
+#################  -  VERIFICANDO PACOTES DROPADOS OU ERROS DE ETHERNET
+	
+	grep errors ifconfig | cut -d : -f 3 | cut -d ' ' -f 1 | sort -r | head -n 1 > $LOCALTEMP
+	grep errors ifconfig | cut -d : -f 4 | cut -d ' ' -f 1 | sort -r | head -n 1 > $LOCALTEMP2
+	Teste1=$( echo $LOCALTEMP )
+	teste2=$( echo $LOCALTEMP2 )
+	if 
+	        [ $(cat /tmp/sosreport-analisys/systemp)  != 0 ]
+	then
+        	echo -e " It has \033[31m errors\033[0m of packages. Check ifconfig"
+	else
+		salva " "
+	fi
+###
+	if 
+	        [ $(cat /tmp/sosreport-analisys/systemp2) != 0 ]
+	then
+	        echo -e "It has \033[31m dropped\033[0m packages. Check ifconfig \n"
+#        else
+#                salva " "
+	fi
+
+########################   -  VERIFICAR HARDWARE & SEGFAULT     \/\/\/\/\/\/\/\/\/\/
+
+	grep "Product Name" dmidecode -B 1 | head -n 2
+	echo " "
+	tac var/log/messages | grep segfault -m 2 --color
+	if 
+		[ $(grep segfault var/log/messages -c) != 0 ] 
+	then
+		echo -en "\033[0;31m Total of Segfaults:\033[0m $(grep segfault var/log/messages -c)\n"
+	fi
+
+############################### Verify if it has Call Traces:
+
+	if
+		[ "$(grep "Call Trace" var/log/messages)" > 0 ]
+	then
+		echo -e "Total of Call Trace:\033[31m $(grep -c "Call Trace" var/log/messages)\033[0m at :"
+		for LINE in $(grep "Call Trace" var/log/messages |awk '{print $1, $2, $3}' |sort -u); do echo -ne  "$LINE \t" ; done; echo ""
+	fi
+
+################### Verify Coredump:  -----------------------------------------------------
+	grep --color=always "/var/crash" var/log/messages* 
+
+	# cat $LOCALFIM
+	#
+	echo -e "\n\n SosReport was created in \033[36m $(cat date) \033[0m UPTIME: $(cat uptime |tr -s ' ' | cut -d ' ' -f 3,4,5,7,8)" 
+}
+
+if
+	[ -z $1 ]
+then 
+#	grep $KERNEL uname --color ##  >> $LOCALFIM
+#	releasee
+	s0s-sh
+else
+### = = = = == = = = = == = = = == = = = = == = = = = = = = = == = = = = = = == = = = = = == = = = = = = = = = == = 
+################## ---------- MENU
+while getopts ":lqSsv:Vi:I:f:F:gGcrRkdb" opt; do
+  case $opt in
+	\?)	 echo -e "Invalid option: $OPTARG\n" ; printusage ; exit 1 ;;
+	l|h)            printusage ;;
+        S)            grep  --color=always segfault var/log/messages* |less --RAW-CONTROL-CHARS ;;
+        s)            grep  --color=always segfault var/log/messages |less --RAW-CONTROL-CHARS ;;
+        V)            while true; do
+                                echo -en "Digite trexo a ser retirado durante o grep do messages :"
+                                read grepV
+                                echo "$grepV" >> $CLEANGREP
+                                cat $CLEANGREP
+                                break
+                        done
+                        ;;  
+	v)	echo "$OPTARG" >> $CLEANGREP ;;
+#                cat $CLEANGREP ;;
+	i)	echo "$OPTARG" >> $GREPGREP ;;
+	I)	echo "$OPTARG" >> $GREPGREP2 ;;
+	f)	grep --color=always -i "$OPTARG" -r * |less --RAW-CONTROL-CHARS 
+		echo "grep --color=always -i "$OPTARG" -r * |less --RAW-CONTROL-CHARS";;
+	F)	if [[ $OPTARG = -* ]]; then     #
+                        ((OPTIND--))            #  check if it is followed by an argument
+                        continue                #
+                fi
+		grep --color=always "$OPTARG" -r * |less --RAW-CONTROL-CHARS ;;
+        g)      cgrep   ;; 
+	G)	cgrepall ;; 
+        c)	        rm -rf /tmp/sosreport-analisys/* ;;
+        r)              CatReboot ;;
+	R)		CatRebootAll ;;
+#	D)	echo "$OPTARG" > $CASEDIR ;;
+	d)	echo -e "\033[36m%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% \033[0m" ;;
+	k)	kdumpstatus ;;
+	b)	s0s-sh ;;
+	:)
+		echo "Option -$OPTARG requires an argument." >&2
+		exit 1 ;;
+  esac
+done
+fi
+
+
+###############\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+#  < COLOCAR: >
+#
+# # Kernel tained??  KDUMP configurado?  Tem sar?
+# uptime sem primeiro relógio
+# 
+#
+#  $ grep fw_discards sos_commands/networking/ethtool_-S_eth*
+#
+###############################################\/\/\/\/\/\/\/\/\/\
+#  
+#   - se em VmWare, verificar se possui vmware-tools
+#	- add calc function:  calc(){ awk "BEGIN{ print $* }" ;}
+#
+#
+###############\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/
+exit 0
